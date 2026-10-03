@@ -204,6 +204,8 @@ footer{margin-top:20px;font-size:11.5px;color:var(--quiet);text-align:center;fon
       <option value="guide">רמת ההכוונה</option>
       <option value="type">סוג תוצר והיקף</option>
       <option value="aud">קהל יעד</option>
+      <option value="community">קהילת עשייה</option>
+      <option value="genre">סוגת תוצר</option>
     </select></div>
   <div class="fgroup"><span class="flabel">שורת סיכום</span>
     <select id="sMode">
@@ -219,6 +221,7 @@ footer{margin-top:20px;font-size:11.5px;color:var(--quiet);text-align:center;fon
   <button class="tab" data-p="gr">גרף התפתחות</button>
   <button class="tab" data-p="mx">מטריצת מיומנויות</button>
   <button class="tab" data-p="sr">מפת הוגים · נלמד מול מתורגל</button>
+  <button class="tab" data-p="cg">קהילות וסוגות</button>
   <button class="tab" data-p="ls">רשימת מטלות</button>
 </div>
 
@@ -226,6 +229,7 @@ footer{margin-top:20px;font-size:11.5px;color:var(--quiet);text-align:center;fon
 <div class="panel" id="gr"></div>
 <div class="panel" id="mx"></div>
 <div class="panel" id="sr"></div>
+<div class="panel" id="cg"></div>
 <div class="panel" id="ls"></div>
 
 <footer>נתוני המיומנויות והתכנים חולצו מניתוח הסילבוסים והמטלות · שיבוץ השבועות טעון אימות מול הסילבוסים</footer>
@@ -262,8 +266,8 @@ const DIMS = {
 
 
 const SEMS = {
- "א":{label:"סמסטר א׳ · 18.10.2026 – 15.01.2027", weeks:13, start:[2026,9,18], breaks:[]},
- "ב":{label:"סמסטר ב׳ · 28.02.2027 – 25.06.2027", weeks:17, start:[2027,1,28], breaks:[8,9]}
+ "א":{label:"סמסטר א׳ · 26.10.2025 – 23.01.2026", weeks:13, start:[2025,9,26], breaks:[]},
+ "ב":{label:"סמסטר ב׳ · 15.03.2026 – 03.07.2026", weeks:16, start:[2026,2,15], breaks:[3,4]}
 };
 
 /* משפחות ההוגים — סיווג מושגי לפי סוג העבודה האינטלקטואלית.
@@ -291,6 +295,13 @@ const famOf = name => THINKER_FAM[name] || "ללא שיוך";
 const FAM_COLOR = {
   "קלאסי":"var(--a)","ביקורתי":"var(--b)","מדינה":"#1d6a8c","ישראלי":"var(--c)",
   "היסטורי":"#8a6d2f","מתודולוגי":"#5a5a6e","ללא שיוך":"var(--quiet)"
+};
+
+/* קהילות העשייה האפשריות — הרשימה המלאה. גם קהילה בלי מטלות מוצגת, כי ההיעדר הוא הממצא. */
+const COMMUNITIES = ["מחקר אקדמי","ייעוץ מדיניות","חברה אזרחית","מגזר ציבורי","הוראה","תקשורת ושיח ציבורי"];
+const COMM_COLOR = {
+  "מחקר אקדמי":"var(--b)","ייעוץ מדיניות":"#1d6a8c","חברה אזרחית":"var(--a)",
+  "מגזר ציבורי":"#5a5a6e","הוראה":"var(--c)","תקשורת ושיח ציבורי":"#8a6d2f"
 };
 
 
@@ -340,7 +351,8 @@ function buildTasks(text){
       sources:splitList(g("sources")), srcNote:g("source_note"),
       srcStatus:g("source_status"), srcFormat:g("source_format"),
       skills:splitList(g("skills")), subs:splitList(g("subskills")),
-      free:g("free_note"), desc:g("desc"), file:g("file_url")
+      free:g("free_note"), desc:g("desc"), file:g("file_url"),
+      community:g("community"), genre:g("genre")
     };
   }).filter(t=>t.id);
 }
@@ -367,7 +379,7 @@ async function boot(){
 
 /* ============ HELPERS ============ */
 const F = {skill:"",year:"",course:"",sem:"",src:"",type:"",text:"",aud:"",sub:"",depth:"",scope:"",guide:"",inquiry:""};
-const cById = id => COURSES.find(c=>c.id===id);
+const cById = id => COURSES.find(c=>c.id===id) || {id, name:"קורס "+id+" (חסר במאגר)", year:"", status:"", sem:"", field:"", assess:"", note:"", thinkers:[], topics:[], structure:""};
 function taskPass(t){
   const c = cById(t.course);
   if(F.skill && !t.skills.includes(F.skill)) return false;
@@ -384,7 +396,7 @@ function taskPass(t){
   if(F.inquiry && t.inquiry!==F.inquiry) return false;
   if(F.text){
     const q=F.text.trim();
-    const hay=[t.concept,t.title,t.desc,t.free||"",t.srcNote||"",t.len||"",(t.sources||[]).join(" "),t.skills.join(" "),(t.subs||[]).join(" "),t.depth||"",t.scope||"",t.guide||"",t.aud||"",c.name,(c.thinkers||[]).join(" "),(c.topics||[]).join(" "),c.structure||""].join(" ");
+    const hay=[t.concept,t.title,t.desc,t.free||"",t.srcNote||"",t.len||"",(t.sources||[]).join(" "),t.skills.join(" "),(t.subs||[]).join(" "),t.depth||"",t.scope||"",t.guide||"",t.aud||"",t.community||"",t.genre||"",c.name,(c.thinkers||[]).join(" "),(c.topics||[]).join(" "),c.structure||""].join(" ");
     if(!hay.includes(q)) return false;
   }
   return true;
@@ -422,6 +434,8 @@ function cellHTML(t,c){
   else if(M==="guide")   inner=`<b>${t.guide||"—"}</b><span class="cmeta">${t.concept}</span>`;
   else if(M==="type")    inner=`<b>${t.type}</b><span class="cmeta">${t.len}</span>`;
   else if(M==="aud")     inner=`<b>${t.aud||"—"}</b><span class="cmeta">${t.concept}</span>`;
+  else if(M==="community") inner=`<b>${t.community||"—"}</b><span class="cmeta">${t.concept}</span>`;
+  else if(M==="genre")   inner=`<b>${t.genre||"—"}</b><span class="cmeta">${t.concept}</span>`;
   return `<span class="chip ${cls}" onclick="openM('${t.id}')">${inner}</span>`;
 }
 function renderTL(){
@@ -875,6 +889,64 @@ function renderTopicsMap(){
 }
 
 /* ============ LIST ============ */
+function renderCG(){
+  const vis = TASKS.filter(taskPass);
+  const total = vis.length;
+  // --- communities: count over the FULL candidate list (zeros are the finding) ---
+  const commCount = {};
+  COMMUNITIES.forEach(c=>commCount[c]=0);
+  let otherComm=0;
+  vis.forEach(t=>{
+    const c=(t.community||"").trim();
+    if(!c) return;
+    if(c in commCount) commCount[c]++; else otherComm++;
+  });
+  const commRows = COMMUNITIES.map(c=>[c,commCount[c]]);
+  if(otherComm) commRows.push(["אחר / לא מסווג",otherComm]);
+  const maxComm = Math.max(1,...commRows.map(r=>r[1]));
+  const activeComm = commRows.filter(r=>r[1]>0).length;
+
+  // --- genres: split pipe-separated, count each ---
+  const genCount = {};
+  vis.forEach(t=>{
+    (t.genre||"").split("|").map(x=>x.trim()).filter(Boolean).forEach(g=>{genCount[g]=(genCount[g]||0)+1;});
+  });
+  const genRows = Object.entries(genCount).sort((a,b)=>b[1]-a[1]);
+  const maxGen = Math.max(1,...genRows.map(r=>r[1]));
+
+  const bar = (label,count,max,color,ghost)=>{
+    const pct = Math.round((count/max)*100);
+    return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
+      <div style="min-width:150px;text-align:left;font-size:12.5px;color:${count?'var(--ink)':'var(--quiet)'};font-weight:${count?600:400}">${label}</div>
+      <div style="flex:1;height:22px;background:#f1efe8;border-radius:5px;position:relative;overflow:hidden">
+        ${count?`<div style="position:absolute;top:0;right:0;height:100%;width:${pct}%;background:${color};border-radius:5px"></div>`:`<div style="position:absolute;top:0;right:0;height:100%;width:100%;border:1px dashed #d3d1c7;border-radius:5px;box-sizing:border-box"></div>`}
+      </div>
+      <div style="min-width:34px;text-align:center;font-size:13px;font-weight:700;color:${count?color:'var(--quiet)'}">${count||'0'}</div>
+    </div>`;
+  };
+
+  let h = `<div class="gaps" style="margin-bottom:14px">
+    <h4>קהילות העשייה שאליהן מכשירות המטלות</h4>
+    <p style="font-size:12.5px;color:var(--muted);margin:2px 0 0">כל בועה היא קהילת פרקטיקה אפשרית לבוגר. הגובה = כמה מטלות מדמות את הפרקטיקה שלה. קהילה ריקה נלמדת ב-0 מטלות — וזה הממצא.</p>
+  </div>`;
+  h += `<div style="max-width:720px">`;
+  commRows.forEach(([c,n])=>{ h+=bar(c,n,maxComm,COMM_COLOR[c]||"var(--quiet)",true); });
+  h += `</div>`;
+  h += `<p class="note" style="padding:10px 2px">${activeComm<=1
+    ? `כל ${total} המטלות מכוונות לקהילה אחת בלבד — <b>מחקר אקדמי</b>. חמש קהילות מקצועיות אחרות אינן מתורגלות באף מטלה. זהו הפער המרכזי שמפת הכשרה (major map) נועדה לחשוף: התואר, כפי שהוא בא לידי ביטוי במטלות, מכשיר למסלול אחד.`
+    : `המטלות מתפרסות על ${activeComm} קהילות. ככל שהפיזור רחב יותר, כך ההכשרה מכוונת למגוון מסלולים מקצועיים.`}</p>`;
+
+  h += `<div class="gaps" style="margin:22px 0 14px">
+    <h4>סוגות התוצר</h4>
+    <p style="font-size:12.5px;color:var(--muted);margin:2px 0 0">אילו סוגי תוצר הסטודנט מתבקש לייצר. כאן, בניגוד לקהילה, יש גיוון — אך כולו בתוך אותה קהילה אחת.</p>
+  </div>`;
+  h += `<div style="max-width:720px">`;
+  genRows.forEach(([g,n])=>{ h+=bar(g,n,maxGen,"var(--a)",false); });
+  h += `</div>`;
+  h += `<p class="note" style="padding:10px 2px">${genRows.length} סוגות שונות — גיוון בצורת התוצר. השוו למפת הקהילות למעלה: הגיוון הוא ב<b>אופן</b> הכתיבה, לא ב<b>קהילה</b> שאליה היא מכוונת.</p>`;
+
+  document.getElementById("cg").innerHTML=h;
+}
 function renderLS(){
   const vis = TASKS.filter(taskPass);
   if(!vis.length){document.getElementById("ls").innerHTML=`<p class="empty">אין מטלות התואמות את הסינון</p>`;return;}
@@ -904,6 +976,8 @@ function openM(id){
     <span class="lab">מה נדרש</span><p>${t.desc}</p>
     <span class="lab">היקף</span><p>${t.len}</p>
     <span class="lab">מושג מרכזי</span><p>${t.concept}</p>
+    ${(t.community||t.genre)?`<span class="lab">קהילה וסוגה</span>
+    <p style="font-size:12.5px">${t.community?`קהילת עשייה: <b style="color:${COMM_COLOR[t.community]||"var(--ink)"}">${t.community}</b>`:""}${(t.community&&t.genre)?" · ":""}${t.genre?`סוגת תוצר: <b>${t.genre}</b>`:""}</p>`:""}
     <span class="lab">הממדים</span>
     <p style="font-size:12.5px">עומק: <b>${t.depth||"—"}</b> · היקף: <b>${t.scope||"—"}</b> · הכוונה: <b>${t.guide||"—"}</b> · אופי: <b>${t.inquiry||"—"}</b> · קהל: <b>${t.aud||"—"}</b></p>
     <span class="lab">רכיבי משנה</span>
@@ -945,7 +1019,7 @@ function openC(id){
 
 /* ============ WIRING ============ */
 function renderAll(){
-  renderTL();renderGR();renderMX();renderSR();renderLS();
+  renderTL();renderGR();renderMX();renderSR();renderCG();renderLS();
   const n=TASKS.filter(taskPass).length;
   document.getElementById("cnt").textContent=`מוצגות ${n} מתוך ${TASKS.length} מטלות`;
 }
