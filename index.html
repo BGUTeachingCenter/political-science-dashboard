@@ -888,35 +888,59 @@ function renderTopicsMap(){
   return h;
 }
 
+/* ============ COMMUNITIES & GENRES ============ */
+let CG_GROUPS = {};
+function openCGList(key){
+  const g=CG_GROUPS[key]; if(!g) return;
+  const rows=g.ids.map(id=>{
+    const t=TASKS.find(x=>x.id===id); if(!t) return "";
+    const c=cById(t.course);
+    return `<div class="chip" style="display:block;margin:4px 0" onclick="openM('${t.id}')">
+      <b>${t.title}</b><span class="cmeta">${c.name} · שנה ${c.year} · סמ׳ ${t.sem}׳ · ש׳${t.week} · ${t.genre||t.type}</span></div>`;
+  }).join("");
+  document.getElementById("modal").innerHTML=`
+    <button class="close" onclick="closeM()">×</button>
+    <h3>${g.label}</h3>
+    <p class="mm">${g.ids.length} מטלות · לחצו על מטלה לפרטים המלאים</p>
+    ${rows}`;
+  document.getElementById("ov").classList.add("on");
+}
+
 /* ============ LIST ============ */
 function renderCG(){
   const vis = TASKS.filter(taskPass);
   const total = vis.length;
+  CG_GROUPS = {};  // reset the drill-in registry on every render
   // --- communities: count over the FULL candidate list (zeros are the finding) ---
-  const commCount = {};
-  COMMUNITIES.forEach(c=>commCount[c]=0);
-  let otherComm=0;
+  const commTasks = {};
+  COMMUNITIES.forEach(c=>commTasks[c]=[]);
+  const otherTasks = [];
   vis.forEach(t=>{
     const c=(t.community||"").trim();
     if(!c) return;
-    if(c in commCount) commCount[c]++; else otherComm++;
+    if(c in commTasks) commTasks[c].push(t); else otherTasks.push(t);
   });
-  const commRows = COMMUNITIES.map(c=>[c,commCount[c]]);
-  if(otherComm) commRows.push(["אחר / לא מסווג",otherComm]);
-  const maxComm = Math.max(1,...commRows.map(r=>r[1]));
-  const activeComm = commRows.filter(r=>r[1]>0).length;
+  const commRows = COMMUNITIES.map(c=>[c,commTasks[c]]);
+  if(otherTasks.length) commRows.push(["אחר / לא מסווג",otherTasks]);
+  const maxComm = Math.max(1,...commRows.map(r=>r[1].length));
+  const activeComm = commRows.filter(r=>r[1].length>0).length;
 
-  // --- genres: split pipe-separated, count each ---
-  const genCount = {};
+  // --- genres: split pipe-separated, collect tasks per genre ---
+  const genTasks = {};
   vis.forEach(t=>{
-    (t.genre||"").split("|").map(x=>x.trim()).filter(Boolean).forEach(g=>{genCount[g]=(genCount[g]||0)+1;});
+    (t.genre||"").split("|").map(x=>x.trim()).filter(Boolean).forEach(g=>{(genTasks[g]=genTasks[g]||[]).push(t);});
   });
-  const genRows = Object.entries(genCount).sort((a,b)=>b[1]-a[1]);
-  const maxGen = Math.max(1,...genRows.map(r=>r[1]));
+  const genRows = Object.entries(genTasks).sort((a,b)=>b[1].length-a[1].length);
+  const maxGen = Math.max(1,...genRows.map(r=>r[1].length));
 
-  const bar = (label,count,max,color,ghost)=>{
+  const bar = (label,tasks,max,color,key)=>{
+    const count=tasks.length;
     const pct = Math.round((count/max)*100);
-    return `<div style="display:flex;align-items:center;gap:10px;margin:5px 0">
+    if(count){ CG_GROUPS[key]={label,ids:tasks.map(t=>t.id)}; }
+    const tip = count ? tasks.map(t=>"• "+t.title).join("\n") : "אין מטלות";
+    const click = count ? `onclick="openCGList('${key}')"` : "";
+    const cursor = count ? "cursor:pointer" : "cursor:default";
+    return `<div ${click} title="${label} — ${count} מטלות\n${tip.replace(/"/g,'&quot;')}" style="display:flex;align-items:center;gap:10px;margin:5px 0;${cursor}">
       <div style="min-width:150px;text-align:left;font-size:12.5px;color:${count?'var(--ink)':'var(--quiet)'};font-weight:${count?600:400}">${label}</div>
       <div style="flex:1;height:22px;background:#f1efe8;border-radius:5px;position:relative;overflow:hidden">
         ${count?`<div style="position:absolute;top:0;right:0;height:100%;width:${pct}%;background:${color};border-radius:5px"></div>`:`<div style="position:absolute;top:0;right:0;height:100%;width:100%;border:1px dashed #d3d1c7;border-radius:5px;box-sizing:border-box"></div>`}
@@ -927,10 +951,10 @@ function renderCG(){
 
   let h = `<div class="gaps" style="margin-bottom:14px">
     <h4>קהילות העשייה שאליהן מכשירות המטלות</h4>
-    <p style="font-size:12.5px;color:var(--muted);margin:2px 0 0">כל בועה היא קהילת פרקטיקה אפשרית לבוגר. הגובה = כמה מטלות מדמות את הפרקטיקה שלה. קהילה ריקה נלמדת ב-0 מטלות — וזה הממצא.</p>
+    <p style="font-size:12.5px;color:var(--muted);margin:2px 0 0">כל שורה היא קהילת פרקטיקה אפשרית לבוגר. האורך = כמה מטלות מדמות את הפרקטיקה שלה. קהילה ריקה נלמדת ב-0 מטלות — וזה הממצא. רחפו מעל עמודה לרשימת המטלות, או לחצו כדי לפתוח אותן.</p>
   </div>`;
   h += `<div style="max-width:720px">`;
-  commRows.forEach(([c,n])=>{ h+=bar(c,n,maxComm,COMM_COLOR[c]||"var(--quiet)",true); });
+  commRows.forEach(([c,arr],i)=>{ h+=bar(c,arr,maxComm,COMM_COLOR[c]||"var(--quiet)","c"+i); });
   h += `</div>`;
   h += `<p class="note" style="padding:10px 2px">${activeComm<=1
     ? `כל ${total} המטלות מכוונות לקהילה אחת בלבד — <b>מחקר אקדמי</b>. חמש קהילות מקצועיות אחרות אינן מתורגלות באף מטלה. זהו הפער המרכזי שמפת הכשרה (major map) נועדה לחשוף: התואר, כפי שהוא בא לידי ביטוי במטלות, מכשיר למסלול אחד.`
@@ -941,7 +965,7 @@ function renderCG(){
     <p style="font-size:12.5px;color:var(--muted);margin:2px 0 0">אילו סוגי תוצר הסטודנט מתבקש לייצר. כאן, בניגוד לקהילה, יש גיוון — אך כולו בתוך אותה קהילה אחת.</p>
   </div>`;
   h += `<div style="max-width:720px">`;
-  genRows.forEach(([g,n])=>{ h+=bar(g,n,maxGen,"var(--a)",false); });
+  genRows.forEach(([g,arr],i)=>{ h+=bar(g,arr,maxGen,"var(--a)","g"+i); });
   h += `</div>`;
   h += `<p class="note" style="padding:10px 2px">${genRows.length} סוגות שונות — גיוון בצורת התוצר. השוו למפת הקהילות למעלה: הגיוון הוא ב<b>אופן</b> הכתיבה, לא ב<b>קהילה</b> שאליה היא מכוונת.</p>`;
 
